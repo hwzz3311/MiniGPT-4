@@ -28,7 +28,7 @@ class BaseTask:
 
     def build_model(self, cfg):
         model_config = cfg.model_cfg
-
+        # 这种注册机制很方便
         model_cls = registry.get_model_class(model_config.arch)
         return model_cls.from_config(model_config)
 
@@ -36,6 +36,9 @@ class BaseTask:
         """
         Build a dictionary of datasets, keyed by split 'train', 'valid', 'test'.
         Download dataset and annotations automatically if not exist.
+        建立一个数据集字典，按拆分的“train”、“valid”和“test”键控。
+
+        如果数据集和注释不存在，请自动下载。
 
         Args:
             cfg (common.config.Config): _description_

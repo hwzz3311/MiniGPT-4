@@ -48,6 +48,14 @@ def get_cache_path(rel_path):
 
 
 def get_abs_path(rel_path):
+    """获取绝对路径
+
+    Args:
+        rel_path (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     return os.path.join(registry.get_path("library_root"), rel_path)
 
 

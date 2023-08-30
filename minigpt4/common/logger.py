@@ -188,6 +188,7 @@ class AttrDict(dict):
 
 
 def setup_logger():
+    # 只有主进程的等级为info、其他进程的等级为warn
     logging.basicConfig(
         level=logging.INFO if dist_utils.is_main_process() else logging.WARN,
         format="%(asctime)s [%(levelname)s] %(message)s",

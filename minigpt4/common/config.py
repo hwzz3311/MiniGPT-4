@@ -20,13 +20,14 @@ class Config:
         self.args = args
 
         # Register the config and configuration for setup
+        # 将configuration 注册到全局
         registry.register("configuration", self)
-
+        # 加载额外的训练参数
         user_config = self._build_opt_list(self.args.options)
+        # {'model': {'arch': 'mini_gpt4', 'model_type': 'pretrain_vicuna', 'freeze_vit': True, 'freeze_qformer': True}, 'datasets': {'laion': {'vis_processor': {'train': {'name': 'blip2_image_train', 'image_size': 224}}, 'text_processor': {'train': {'name': 'blip_caption'}}, 'sample_ratio': 115}, 'cc_sbu': {'vis_processor': {'train': {'name': 'blip2_image_train', 'image_size': 224}}, 'text_processor': {'train': {'name': 'blip_caption'}}, 'sample_ratio': 14}}, 'run': {'task': 'image_text_pretrain', 'lr_sched': 'linear_warmup_cosine_lr', 'init_lr': 0.0001, 'min_lr': 8e-05, 'warmup_lr': 1e-06, 'weight_decay': 0.05, 'max_epoch': 4, 'batch_size_train': 64, 'batch_size_eval': 64, 'num_workers': 4, 'warmup_steps': 5000, 'iters_per_epoch': 5000, 'seed': 42, 'output_dir': 'output/minigpt4_stage1_pretrain', 'amp': True, 'resume_ckpt_path': None, 'evaluate': False, 'train_splits': ['train'], 'device': 'cuda', 'world_size': 1, 'dist_url': 'env://', 'distributed': True}}
+        config: dict = OmegaConf.load(self.args.cfg_path)
 
-        config = OmegaConf.load(self.args.cfg_path)
-
-        runner_config = self.build_runner_config(config)
+        runner_config: dict = self.build_runner_config(config)  # {"run":{....}}
         model_config = self.build_model_config(config, **user_config)
         dataset_config = self.build_dataset_config(config)
 
@@ -55,9 +56,18 @@ class Config:
 
     @staticmethod
     def build_model_config(config, **kwargs):
+        """构建模型的配置
+
+        Args:
+            config (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         model = config.get("model", None)
         assert model is not None, "Missing model configuration file."
 
+        # 获取已经实例化的 类  这个mini_gpt4 的cls是在models/mini_gpt4中使用装饰器注册进来的
         model_cls = registry.get_model_class(model.arch)
         assert model_cls is not None, f"Model '{model.arch}' has not been registered."
 
@@ -68,15 +78,16 @@ class Config:
 
         assert model_type is not None, "Missing model_type."
 
-        model_config_path = model_cls.default_config_path(model_type=model_type)
+        model_config_path = model_cls.default_config_path(model_type=model_type) # minigpt4/configs/models/minigpt4.yaml
 
         model_config = OmegaConf.create()
         # hierarchy override, customized config > default config
+        # 层次结构覆盖，自定义配置>默认配置
         model_config = OmegaConf.merge(
             model_config,
             OmegaConf.load(model_config_path),
             {"model": config["model"]},
-        )
+            )
 
         return model_config
 
@@ -86,6 +97,17 @@ class Config:
 
     @staticmethod
     def build_dataset_config(config):
+        """构建训练数据的相关配置
+
+        Args:
+            config (_type_): _description_
+
+        Raises:
+            KeyError: _description_
+
+        Returns:
+            _type_: _description_
+        """
         datasets = config.get("datasets", None)
         if datasets is None:
             raise KeyError(
@@ -95,7 +117,9 @@ class Config:
         dataset_config = OmegaConf.create()
 
         for dataset_name in datasets:
+            # CCSBUBuilder
             builder_cls = registry.get_builder_class(dataset_name)
+
 
             dataset_config_type = datasets[dataset_name].get("type", "default")
             dataset_config_path = builder_cls.default_config_path(
@@ -141,6 +165,8 @@ class Config:
         return self.config.model
 
     def pretty_print(self):
+        """打印一些必要的配置信息
+        """
         logging.info("\n=====  Running Parameters    =====")
         logging.info(self._convert_node_to_json(self.config.run))
 
@@ -153,7 +179,8 @@ class Config:
                 dataset_config = self.config.datasets[dataset]
                 logging.info(self._convert_node_to_json(dataset_config))
             else:
-                logging.warning(f"No dataset named '{dataset}' in config. Skipping")
+                logging.warning(
+                    f"No dataset named '{dataset}' in config. Skipping")
 
         logging.info(f"\n======  Model Attributes  ======")
         logging.info(self._convert_node_to_json(self.config.model))
@@ -236,7 +263,8 @@ class ConfigValidator:
                 try:
                     self.arguments[k].val = self.arguments[k].type(v)
                 except ValueError:
-                    raise ValueError(f"{k} is not a valid {self.arguments[k].type}.")
+                    raise ValueError(
+                        f"{k} is not a valid {self.arguments[k].type}.")
 
             if self.arguments[k].choices is not None:
                 assert (
@@ -297,7 +325,8 @@ def create_runner_config_validator():
         "lr_sched",
         type=str,
         choices=lr_scheds_choices,
-        help="Learning rate scheduler to use, from {}".format(lr_scheds_choices),
+        help="Learning rate scheduler to use, from {}".format(
+            lr_scheds_choices),
     )
     task_choices = registry.list_tasks()
     validator.add_argument(

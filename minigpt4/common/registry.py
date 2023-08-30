@@ -326,4 +326,5 @@ class Registry:
         return cls.mapping["state"].pop(name, None)
 
 
+# 一种单例模式的做法，保证只有一个示例对象
 registry = Registry()

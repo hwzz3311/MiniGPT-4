@@ -17,7 +17,9 @@ import timm.models.hub as timm_hub
 def setup_for_distributed(is_master):
     """
     This function disables printing when not in master process
+    控制打印的一种方法，保证只有主进程可以print
     """
+    # builtins 为内嵌函数，不需要import 即可使用
     import builtins as __builtin__
 
     builtin_print = __builtin__.print
@@ -25,8 +27,9 @@ def setup_for_distributed(is_master):
     def print(*args, **kwargs):
         force = kwargs.pop("force", False)
         if is_master or force:
+            # 只有在主进程或者强制的模式才可以正常打印
             builtin_print(*args, **kwargs)
-
+    # 在这里将内嵌的print函数 替换成了自定义的函数
     __builtin__.print = print
 
 
@@ -55,12 +58,17 @@ def is_main_process():
 
 
 def init_distributed_mode(args):
+    """_summary_
+
+    Args:
+        args (_type_): _description_
+    """
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
-        args.rank = int(os.environ["RANK"])
-        args.world_size = int(os.environ["WORLD_SIZE"])
-        args.gpu = int(os.environ["LOCAL_RANK"])
+        args.rank = int(os.environ["RANK"]) # 当前进程的rank,即进程编号。
+        args.world_size = int(os.environ["WORLD_SIZE"]) # 参与训练的进程总数。
+        args.gpu = int(os.environ["LOCAL_RANK"]) # 当前进程在单个机器内的rank。可以理解为gpu ids 
     elif "SLURM_PROCID" in os.environ:
-        args.rank = int(os.environ["SLURM_PROCID"])
+        args.rank = int(os.environ["SLURM_PROCID"]) # 是Slurm任务调度系统分配的进程ID,在使用Slurm启动分布式作业时,它表示当前进程的rank。
         args.gpu = args.rank % torch.cuda.device_count()
     else:
         print("Not using distributed mode")
@@ -70,6 +78,7 @@ def init_distributed_mode(args):
     args.distributed = True
 
     torch.cuda.set_device(args.gpu)
+    # nccl的后端通信
     args.dist_backend = "nccl"
     print(
         "| distributed init (rank {}, world {}): {}".format(
@@ -79,15 +88,15 @@ def init_distributed_mode(args):
     )
     torch.distributed.init_process_group(
         backend=args.dist_backend,
-        init_method=args.dist_url,
+        init_method=args.dist_url, # 使用NCCL后端通信,不需要指定地址。单机多卡通常使用gloo或nccl,不需要外部通信。
         world_size=args.world_size,
         rank=args.rank,
         timeout=datetime.timedelta(
             days=365
         ),  # allow auto-downloading and de-compressing
     )
-    torch.distributed.barrier()
-    setup_for_distributed(args.rank == 0)
+    torch.distributed.barrier() # torch.distributed.barrier() 用来同步各进程,确保每个进程都调用了 init_process_group。
+    setup_for_distributed(args.rank == 0) # setup_for_distributed 设置日志记录
 
 
 def get_dist_info():
