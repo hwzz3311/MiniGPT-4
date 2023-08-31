@@ -35,13 +35,13 @@ from minigpt4.tasks import *
 def parse_args():
     parser = argparse.ArgumentParser(description="Training")
 
-    parser.add_argument("--cfg-path", required=True, help="path to configuration file.") # 配置文件
+    parser.add_argument("--cfg-path", required=True, help="path to configuration file.")  # 配置文件
     parser.add_argument(
         "--options",
         nargs="+",
         help="override some settings in the used config, the key-value pair "
-        "in xxx=yyy format will be merged into config file (deprecate), "
-        "change to --cfg-options instead.",
+             "in xxx=yyy format will be merged into config file (deprecate), "
+             "change to --cfg-options instead.",
     )
 
     args = parser.parse_args()
@@ -91,13 +91,13 @@ def main():
     # 打印出一些参数信息
     cfg.pretty_print()
 
-    task = tasks.setup_task(cfg)# 第一阶段时 image_text_pretrain
-    datasets = task.build_datasets(cfg)# 构建数据集
-    model = task.build_model(cfg)# 构建模型
+    task = tasks.setup_task(cfg)  # 第一阶段时 image_text_pretrain
+    datasets = task.build_datasets(cfg)  # 构建数据集
+    model = task.build_model(cfg)  # 构建模型
     # 初始化一个训练的基础类
     runner = get_runner_class(cfg)(
         cfg=cfg, job_id=job_id, task=task, model=model, datasets=datasets
-    ) 
+    )
     runner.train()
 
 
