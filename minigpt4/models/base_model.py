@@ -73,6 +73,7 @@ class BaseModel(nn.Module):
 
     @classmethod
     def default_config_path(cls, model_type):
+        # 根据每个class 下对PRETRAINED_MODEL_CONFIG_DICT的配置，加载对应的配置文件
         assert (
             model_type in cls.PRETRAINED_MODEL_CONFIG_DICT
         ), "Unknown model type {}".format(model_type)

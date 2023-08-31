@@ -16,7 +16,7 @@ class MiniGPT4(Blip2Base):
     """
     BLIP2 GPT-LLAMA model.
     """
-
+    # 预训练模型配置
     PRETRAINED_MODEL_CONFIG_DICT = {
         "pretrain_vicuna": "configs/models/minigpt4.yaml",
     }

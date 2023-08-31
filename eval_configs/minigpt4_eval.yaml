@@ -8,7 +8,8 @@ model:
   low_resource: True
   prompt_path: "prompts/alignment.txt"
   prompt_template: '###Human: {} ###Assistant: '
-  ckpt: '/path/to/pretrained/ckpt/'
+  ckpt: '/u01/isi/zhengzhao/MiniGPT4-7B/prerained_minigpt4_7b.pth'
+  llama_model: '/u01/isi/zhengzhao/vicuna/weight'
 
 
 datasets:

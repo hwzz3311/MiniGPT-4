@@ -28,7 +28,7 @@ class BaseTask:
 
     def build_model(self, cfg):
         model_config = cfg.model_cfg
-
+        # 这种注册机制很方便
         model_cls = registry.get_model_class(model_config.arch)
         return model_cls.from_config(model_config)
 
@@ -36,6 +36,9 @@ class BaseTask:
         """
         Build a dictionary of datasets, keyed by split 'train', 'valid', 'test'.
         Download dataset and annotations automatically if not exist.
+        建立一个数据集字典，按拆分的“train”、“valid”和“test”键控。
+
+        如果数据集和注释不存在，请自动下载。
 
         Args:
             cfg (common.config.Config): _description_
@@ -111,6 +114,22 @@ class BaseTask:
         log_freq=50,
         accum_grad_iters=1,
     ):
+        """
+        训练 epoch n
+        Args:
+            epoch (_type_): _description_
+            model (_type_): _description_
+            data_loader (_type_): _description_
+            optimizer (_type_): _description_
+            lr_scheduler (_type_): _description_
+            scaler (_type_, optional): _description_. Defaults to None.
+            cuda_enabled (bool, optional): _description_. Defaults to False.
+            log_freq (int, optional): _description_. Defaults to 50.
+            accum_grad_iters (int, optional): _description_. Defaults to 1.
+
+        Returns:
+            _type_: _description_
+        """
         return self._train_inner_loop(
             epoch=epoch,
             iters_per_epoch=lr_scheduler.iters_per_epoch,
@@ -171,6 +190,10 @@ class BaseTask:
 
         When using epoch-based, training stops after one epoch; when using iter-based,
         training stops after #iters_per_epoch iterations.
+        与基于epoch和iter的训练兼容的内部训练循环。
+        当使用基于epoch时，训练在一个epoch之后停止；当使用基于iter时，
+
+        训练在#iters_per_epoch迭代之后停止。
         """
         use_amp = scaler is not None
 
@@ -201,7 +224,7 @@ class BaseTask:
             # if using iter-based runner, we stop after iters_per_epoch iterations.
             if i >= iters_per_epoch:
                 break
-
+            # 获取数据，TODO 需要看看 data loader 具体时怎么构建的
             samples = next(data_loader)
 
             samples = prepare_sample(samples, cuda_enabled=cuda_enabled)

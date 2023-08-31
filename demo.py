@@ -22,7 +22,8 @@ from minigpt4.tasks import *
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Demo")
-    parser.add_argument("--cfg-path", required=True, help="path to configuration file.")
+    # parser.add_argument("--cfg-path", required=True, help="path to configuration file.")
+    parser.add_argument("--cfg-path", required=False, help="path to configuration file.",default="eval_configs/minigpt4_eval.yaml")
     parser.add_argument("--gpu-id", type=int, default=0, help="specify the gpu to load the model.")
     parser.add_argument(
         "--options",
@@ -32,6 +33,7 @@ def parse_args():
         "change to --cfg-options instead.",
     )
     args = parser.parse_args()
+    # args.cfg-path = "eval_configs/minigpt4_eval.yaml"
     return args
 
 
@@ -150,4 +152,4 @@ with gr.Blocks() as demo:
     )
     clear.click(gradio_reset, [chat_state, img_list], [chatbot, image, text_input, upload_button, chat_state, img_list], queue=False)
 
-demo.launch(share=True, enable_queue=True)
+demo.launch(share=True, enable_queue=True,debug=True)

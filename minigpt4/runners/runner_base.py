@@ -361,13 +361,16 @@ class RunnerBase:
         self.output_dir = output_dir
 
     def train(self):
+        """模型训练的入口 TODO 需要学习下，多个不同任务的模型是怎么用统一的代码训练出来的，如何写的优雅、简洁
+        """
         start_time = time.time()
         best_agg_metric = 0
         best_epoch = 0
-
+        # 先将当前的config 写到log
         self.log_config()
 
         # resume from checkpoint if specified
+        # 从check point 中恢复
         if not self.evaluate_only and self.resume_ckpt_path is not None:
             self._load_checkpoint(self.resume_ckpt_path)
 
