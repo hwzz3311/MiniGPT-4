@@ -40,6 +40,8 @@ class BaseTask:
 
         如果数据集和注释不存在，请自动下载。
 
+        这里只划分了数据集，并未创建dataloader
+
         Args:
             cfg (common.config.Config): _description_
 
@@ -198,9 +200,9 @@ class BaseTask:
         use_amp = scaler is not None
 
         if not hasattr(data_loader, "__next__"):
-            # convert to iterator if not already
+            # convert to iterator if not already TODO data_loader 是什么type？
             data_loader = iter(data_loader)
-
+        # 创建一个日志打印的log
         metric_logger = MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.6f}"))
         metric_logger.add_meter("loss", SmoothedValue(window_size=1, fmt="{value:.4f}"))
@@ -208,8 +210,7 @@ class BaseTask:
         # if iter-based runner, schedule lr based on inner epoch.
         logging.info(
             "Start training epoch {}, {} iters per inner epoch.".format(
-                epoch, iters_per_epoch
-            )
+                epoch, iters_per_epoch)
         )
         header = "Train: data epoch: [{}]".format(epoch)
         if start_iters is None:

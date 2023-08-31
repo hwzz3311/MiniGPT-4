@@ -88,6 +88,9 @@ def move_to_cuda(sample):
 
 
 def prepare_sample(samples, cuda_enabled=True):
+    """
+    为了兼容多种格式
+    """
     if cuda_enabled:
         samples = move_to_cuda(samples)
 
@@ -96,8 +99,9 @@ def prepare_sample(samples, cuda_enabled=True):
     return samples
 
 
-def reorg_datasets_by_split(datasets):
+def reorg_datasets_by_split(datasets) -> dict:
     """
+    切分数据集，将数据集变为类似于：{"train":[],"dev":[],"test":[]}
     Organizes datasets by split.
 
     Args:

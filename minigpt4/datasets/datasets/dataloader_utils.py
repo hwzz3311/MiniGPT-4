@@ -49,11 +49,14 @@ class PrefetchLoader(object):
 
     overlap compute and cuda data transfer
     (copied and then modified from nvidia apex)
+    用于数据加载的类，用于在数据加载和 GPU 数据传输之间实现重叠操作，从而提高数据加载的效率
+
+    TODO 此处的预加载的流程还不是很明白
     """
 
     def __init__(self, loader):
         self.loader = loader
-        self.stream = torch.cuda.Stream()
+        self.stream = torch.cuda.Stream()  # 用于异步的 GPU 计算和数据传输操作。
 
     def __iter__(self):
         loader_it = iter(self.loader)

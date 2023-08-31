@@ -206,7 +206,7 @@ class RunnerBase:
                 "dataset_ratios not specified, datasets will be concatenated (map-style datasets) or chained (webdataset.DataPipeline)."
             )
 
-            datasets = reorg_datasets_by_split(self.datasets)
+            datasets: dict = reorg_datasets_by_split(self.datasets)
             self.datasets = datasets
             # self.datasets = concat_datasets(datasets)
 
@@ -216,6 +216,7 @@ class RunnerBase:
                     self.datasets[split_name], list
                 ):
                     # mixed wds.DataPipeline and torch.utils.data.Dataset
+                    # num_records用于统计每个分割中的数据记录数，以便在日志中输出加载了多少条数据
                     num_records = sum(
                         [
                             len(d)
@@ -254,7 +255,7 @@ class RunnerBase:
                 if split == "train"
                 else self.config.run_cfg.batch_size_eval
                 for split in split_names
-            ]
+            ] # train 、eval 模式下不同的batch size
 
             collate_fns = []
             for dataset in datasets:
@@ -502,7 +503,9 @@ class RunnerBase:
     ):
         """
         Create dataloaders for training and validation.
+        num_workers : config.run_cfg.num_workers
         """
+
 
         def _create_loader(dataset, num_workers, bsz, is_train, collate_fn):
             # create a single dataloader for each split
@@ -559,6 +562,7 @@ class RunnerBase:
         ):
             if isinstance(dataset, list) or isinstance(dataset, tuple):
                 if hasattr(dataset[0], 'sample_ratio') and dataset_ratios is None:
+                    # 数据采样比例
                     dataset_ratios = [d.sample_ratio for d in dataset]
                 loader = MultiIterLoader(
                     loaders=[
