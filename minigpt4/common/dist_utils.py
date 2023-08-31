@@ -114,6 +114,14 @@ def get_dist_info():
 
 
 def main_process(func):
+    """
+    主进程过滤器，只有为主进程时才会运行被装饰的函数
+    Args:
+        func (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         rank, _ = get_dist_info()

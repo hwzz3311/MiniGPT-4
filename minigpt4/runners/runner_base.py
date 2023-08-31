@@ -366,10 +366,11 @@ class RunnerBase:
         start_time = time.time()
         best_agg_metric = 0
         best_epoch = 0
-
+        # 先将当前的config 写到log
         self.log_config()
 
         # resume from checkpoint if specified
+        # 从check point 中恢复
         if not self.evaluate_only and self.resume_ckpt_path is not None:
             self._load_checkpoint(self.resume_ckpt_path)
 
