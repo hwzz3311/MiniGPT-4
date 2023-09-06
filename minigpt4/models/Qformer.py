@@ -49,7 +49,9 @@ logger = logging.get_logger(__name__)
 
 
 class BertEmbeddings(nn.Module):
-    """Construct the embeddings from word and position embeddings."""
+    """Construct the embeddings from word and position embeddings.
+    和bert 的embedding一样
+    """
 
     def __init__(self, config):
         super().__init__()
@@ -387,6 +389,7 @@ class BertLayer(nn.Module):
             self.config.add_cross_attention
             and layer_num % self.config.cross_attention_freq == 0
         ):
+            # 在每一层的 BertSelfAttention 里添加 vision_width
             self.crossattention = BertAttention(
                 config, is_cross_attention=self.config.add_cross_attention
             )
@@ -605,6 +608,9 @@ class BertPooler(nn.Module):
 
 
 class BertPredictionHeadTransform(nn.Module):
+    """
+    这个类对输入的hidden states做转换,包含一个dense层,一个激活函数和一个layer norm。目的是在预测之前转换hidden states。
+    """
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
@@ -622,6 +628,10 @@ class BertPredictionHeadTransform(nn.Module):
 
 
 class BertLMPredictionHead(nn.Module):
+    """
+    这个类包含一个BertPredictionHeadTransform来转换hidden states。然后应用一个线性层来预测词汇表上的分数。权重与输入embeddings绑定。
+
+    """
     def __init__(self, config):
         super().__init__()
         self.transform = BertPredictionHeadTransform(config)
@@ -642,6 +652,10 @@ class BertLMPredictionHead(nn.Module):
 
 
 class BertOnlyMLMHead(nn.Module):
+    """
+    这个类包含一个BertLMPredictionHead。它在预训练过程中用于masked language modeling任务。
+    它获取BERT的sequence output,并预测被mask的token的分数。
+    """
     def __init__(self, config):
         super().__init__()
         self.predictions = BertLMPredictionHead(config)
@@ -655,6 +669,7 @@ class BertPreTrainedModel(PreTrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
+    一个用于处理权重初始化的抽象类，以及一个用于下载和加载预训练模型的简单接口。
     """
 
     config_class = BertConfig
@@ -682,6 +697,7 @@ class BertModel(BertPreTrainedModel):
     Llion Jones, Aidan N. Gomez, Lukasz Kaiser and Illia Polosukhin.
     argument and :obj:`add_cross_attention` set to :obj:`True`; an :obj:`encoder_hidden_states` is then expected as an
     input to the forward pass.
+    和 bert原版结构一致
     """
 
     def __init__(self, config, add_pooling_layer=False):
@@ -972,7 +988,7 @@ class BertLMHeadModel(BertPreTrainedModel):
 
     def __init__(self, config):
         super().__init__(config)
-
+        # 原版bert中去除pool 层
         self.bert = BertModel(config, add_pooling_layer=False)
         self.cls = BertOnlyMLMHead(config)
 
@@ -1042,7 +1058,7 @@ class BertLMHeadModel(BertPreTrainedModel):
             use_cache = False
         if past_key_values is not None:
             query_embeds = None
-
+        # 通过BertModel获取序列输出,
         outputs = self.bert(
             input_ids,
             attention_mask=attention_mask,
@@ -1058,11 +1074,11 @@ class BertLMHeadModel(BertPreTrainedModel):
             return_dict=return_dict,
             is_decoder=is_decoder,
         )
-
+        # 获取 sequence_output
         sequence_output = outputs[0]
         if query_embeds is not None:
             sequence_output = outputs[0][:, query_embeds.shape[1] :, :]
-
+        # 然后通过BertOnlyMLMHead计算预测分数。
         prediction_scores = self.cls(sequence_output)
 
         if return_logits:
@@ -1071,6 +1087,7 @@ class BertLMHeadModel(BertPreTrainedModel):
         lm_loss = None
         if labels is not None:
             # we are doing next-token prediction; shift prediction scores and input ids by one
+            # 如果进行next token预测,会将标签和预测移动一位计算语言模型loss。
             shifted_prediction_scores = prediction_scores[:, :-1, :].contiguous()
             labels = labels[:, 1:].contiguous()
             loss_fct = CrossEntropyLoss(reduction=reduction, label_smoothing=0.1)
@@ -1084,7 +1101,7 @@ class BertLMHeadModel(BertPreTrainedModel):
         if not return_dict:
             output = (prediction_scores,) + outputs[2:]
             return ((lm_loss,) + output) if lm_loss is not None else output
-
+        #
         return CausalLMOutputWithCrossAttentions(
             loss=lm_loss,
             logits=prediction_scores,
@@ -1097,6 +1114,7 @@ class BertLMHeadModel(BertPreTrainedModel):
     def prepare_inputs_for_generation(
         self, input_ids, query_embeds, past=None, attention_mask=None, **model_kwargs
     ):
+        # 用于准备解码时的输入。准备数据格式
         # if model is used as a decoder in encoder-decoder model, the decoder attention mask is created on the fly
         if attention_mask is None:
             attention_mask = input_ids.new_ones(input_ids.shape)
@@ -1118,6 +1136,18 @@ class BertLMHeadModel(BertPreTrainedModel):
         }
 
     def _reorder_cache(self, past, beam_idx):
+        """
+        在transformer解码器中,会保存已经生成的token的key和value作为cache,来加速解码过程。这个past变量就是保存这些cache。
+        在beam search解码过程中,由于保留了多个候选解,输入的batch size是变化的,那么cache也需要重新按照新的batch size进行排列。
+        具体来看:
+            past是解码器层的cache,它是一个tuple,里面每个元素又是一个tuple,对应一个解码层的cache。
+            每层的cache又包含key和value,past_state就是遍历key和value。
+            使用index_select操作,根据beam_idx把cache切片重排。beam_idx指定了新的batch中样本的顺序。
+            最后构建新的重新排序后的cache tuple返回。
+            这样就可以按照新的beam size和顺序,正确的选择cache中的tensor片段,实现cache的重排。
+
+
+        """
         reordered_past = ()
         for layer_past in past:
             reordered_past += (

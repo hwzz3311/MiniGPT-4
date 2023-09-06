@@ -28,6 +28,9 @@ from transformers import BertTokenizer
 class Blip2Base(BaseModel):
     @classmethod
     def init_tokenizer(cls):
+        """
+        加载 bert 分词器
+        """
         tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         tokenizer.add_special_tokens({"bos_token": "[DEC]"})
         return tokenizer
@@ -44,9 +47,13 @@ class Blip2Base(BaseModel):
 
     @classmethod
     def init_Qformer(cls, num_query_token, vision_width, cross_attention_freq=2):
+        """
+        初始化Qformer模块
+        """
         encoder_config = BertConfig.from_pretrained("bert-base-uncased")
+        # Qformer --> BertSelfAttention --> __init__
         encoder_config.encoder_width = vision_width
-        # insert cross-attention layer every other block
+        # insert cross-attention layer every other block 每隔一块插入交叉关注层
         encoder_config.add_cross_attention = True
         encoder_config.cross_attention_freq = cross_attention_freq
         encoder_config.query_length = num_query_token
@@ -61,6 +68,9 @@ class Blip2Base(BaseModel):
     def init_vision_encoder(
         cls, model_name, img_size, drop_path_rate, use_grad_checkpoint, precision
     ):
+        """
+        初始化视觉编码部分
+        """
         assert model_name == "eva_clip_g", "vit model must be eva_clip_g for current version of MiniGPT-4"
         visual_encoder = create_eva_vit_g(
             img_size, drop_path_rate, use_grad_checkpoint, precision
