@@ -164,7 +164,7 @@ class RunnerBase:
                     iters_per_epoch = len(self.dataloaders['train'])
                 except (AttributeError, TypeError):
                     iters_per_epoch = 10000
-
+            # 初始化一个学习率调整的实例
             self._lr_sched = lr_sched_cls(
                 optimizer=self.optimizer,
                 max_epoch=max_epoch,
@@ -318,6 +318,9 @@ class RunnerBase:
 
     @property
     def train_splits(self):
+        """
+        划分数据集
+        """
         train_splits = self.config.run_cfg.get("train_splits", [])
 
         if len(train_splits) == 0:

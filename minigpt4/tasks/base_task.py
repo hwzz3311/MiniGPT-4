@@ -238,7 +238,7 @@ class BaseTask:
             )
 
             lr_scheduler.step(cur_epoch=inner_epoch, cur_step=i)
-
+            # 是否启用混合精度
             with torch.cuda.amp.autocast(enabled=use_amp):
                 loss = self.train_step(model=model, samples=samples)
 

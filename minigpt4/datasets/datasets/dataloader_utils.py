@@ -51,7 +51,8 @@ class PrefetchLoader(object):
     (copied and then modified from nvidia apex)
     用于数据加载的类，用于在数据加载和 GPU 数据传输之间实现重叠操作，从而提高数据加载的效率
 
-    TODO 此处的预加载的流程还不是很明白
+    TODO 此处的预加载的流程还不是很明白，只能debug看了
+    相关链接：https://zhuanlan.zhihu.com/p/80695364?utm_medium=social&utm_oi=629375409599549440&utm_id=0
     """
 
     def __init__(self, loader):
@@ -130,6 +131,7 @@ def record_cuda_stream(batch):
 class IterLoader:
     """
     A wrapper to convert DataLoader as an infinite iterator.
+    该类的主要功能是实现在遍历数据时，当一个 epoch 结束后重新开始遍历数据集，以支持多轮训练。
 
     Modified from:
         https://github.com/open-mmlab/mmcv/blob/master/mmcv/runner/iter_based_runner.py
