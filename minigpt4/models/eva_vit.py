@@ -212,6 +212,22 @@ class PatchEmbed(nn.Module):
 
 
 class RelativePositionBias(nn.Module):
+    """
+    解释一下Vision Transformer中相对位置编码的实现:
+
+    在图像里,每个pixel可以看成是一个向量,就是输入的特征图中的一个向量。
+    对于注意力机制来说,需要计算每个pixel向量和其他所有pixel向量之间的关系。
+    但是不同位置的pixel其实Encoding的信息不一样,所以需要加入位置的信息。
+    Vision Transformer这里引入了相对位置编码,就是每个pixel会编码自己相对于其他pixel的相对位置信息。
+    具体来说,给每个pixel增加两个值:
+    行号row:表示相对于第一行的偏移量
+    列号col:表示相对于第一列的偏移量
+    然后给row和col每个位置编码一个可学习的向量,其长度等于transformer的hidden size。
+    在计算注意力时,将每个pixel的row向量和col向量分别加到query向量和key向量上。
+    这样注意力就可以感知不同位置的pixel之间的相对位置关系,从而提升模型对图像的建模能力。
+    经过训练,这些位置编码向量可以自动学习到合理的值,来控制不同相对位置pixel之间的关系。
+    所以位置编码为注意力机制提供了额外的位置信息,是Vision Transformer有效处理图像的关键。
+    """
 
     def __init__(self, window_size, num_heads):
         """
