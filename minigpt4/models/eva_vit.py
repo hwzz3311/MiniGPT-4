@@ -57,7 +57,7 @@ class Mlp(nn.Module):
         x = self.fc1(x)
         x = self.act(x)
         # x = self.drop(x)
-        # commit this for the orignal BERT implement 
+        # commit this for the orignal BERT implement
         x = self.fc2(x)
         x = self.drop(x)
         return x
@@ -309,6 +309,10 @@ class VisionTransformer(nn.Module):
         # 在patch embedding后的序列中,添加一个class token,用来表示整张图片的特征。这个token和NLP中的[CLS] token类似,后续分类时用这个token的特征进行分类。
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))  # cls token
 
+        # 同时定义了绝对位置编码pos_embed和相对位置编码rel_pos_bias,原因是:
+        #
+        # 绝对位置编码pos_embed可以提供每个patch的绝对坐标信息。这对图片中的局部特征是非常重要的,可以帮助模型理解图像内容。
+        # 相对位置编码rel_pos_bias可以提供像素之间的相对坐标信息。这对学习图像的二维几何结构非常重要。
         if use_abs_pos_emb:
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))  # 绝对位置编码，加1是因为要额外添加class token
         else:
@@ -316,14 +320,22 @@ class VisionTransformer(nn.Module):
         self.pos_drop = nn.Dropout(p=drop_rate)
 
         if use_shared_rel_pos_bias:
+            # 相对位置编码
             self.rel_pos_bias = RelativePositionBias(window_size=self.patch_embed.patch_shape,
                                                      num_heads=num_heads)  # 相对位置编码
         else:
             self.rel_pos_bias = None
         self.use_checkpoint = use_checkpoint
-
+        # 这行代码的作用是实现 stochastic depth,即随机丢弃 Block 的技巧。
+        # torch.linspace生成从0到drop_path_rate之间均匀间隔的depth个值。[0,drop_path_rate*1,drop_path_rate*2,....]
+        # x.item()将tensor转换为python number。
+        # 因此dpr是一个含有depth个dropout probability的list,这些probability随着layer深度线性增大。
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
         self.use_rel_pos_bias = use_rel_pos_bias
+        # 构建一个dropout 的 Block list 随着层数增深,drop_path probability逐渐增大。
+        # 深层的Block会随机丢弃,有效防止过拟合,使模型对噪声更加鲁棒。
+        # 但浅层的Block不丢弃,保证足够的信息传递到深层。
+        # 这是一个有效的正则化技巧,既防止过拟合又保证性能,已被证实对Transformer类模型很有效。
         self.blocks = nn.ModuleList([
             Block(
                 dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
@@ -335,6 +347,7 @@ class VisionTransformer(nn.Module):
         #         self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
         if self.pos_embed is not None:
+            # 使用截断正态分布进行初始化。使位置编码的值近似满足正态分布,但被限制在2个标准差之内,避免初始化取值过大。
             trunc_normal_(self.pos_embed, std=.02)
         trunc_normal_(self.cls_token, std=.02)
         # trunc_normal_(self.mask_token, std=.02)
@@ -348,7 +361,15 @@ class VisionTransformer(nn.Module):
     #             self.head.bias.data.mul_(init_scale)
 
     def fix_init_weight(self):
+        """
+        针对每一个transformer block里的attn和mlp模块,对权重进行缩放初始化。
+        可以使得每一层的参数方差随着层数的增加而逐渐变小。
+        初始化方式有利于信息在网络中间层的传播。
+        """
         def rescale(param, layer_id):
+            """
+            通过param.div_(math.sqrt(2.0 * layer_id))实现缩放。
+            """
             param.div_(math.sqrt(2.0 * layer_id))
 
         for layer_id, layer in enumerate(self.blocks):
@@ -357,10 +378,13 @@ class VisionTransformer(nn.Module):
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
+            # 对Linear层的weight用截断正态分布初始化,std=0.02。
             trunc_normal_(m.weight, std=.02)
             if isinstance(m, nn.Linear) and m.bias is not None:
+                # 对Linear层的bias初始化为0。
                 nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.LayerNorm):
+            # 对LayerNorm层的bias初始化为0, weight初始化为1。
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
@@ -368,15 +392,22 @@ class VisionTransformer(nn.Module):
         return self.head
 
     def reset_classifier(self, num_classes, global_pool=''):
+        """
+        重置 分类头
+        """
         self.num_classes = num_classes
+        # nn.Identity()是一个在PyTorch中常用的层,它不会对输入进行任何操作,只是简单地将输入返回。
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
+        # patch_embed提取patch特征
         x = self.patch_embed(x)
         batch_size, seq_len, _ = x.size()
-
+        # 加入cls_token
         cls_tokens = self.cls_token.expand(batch_size, -1, -1)  # stole cls_tokens impl from Phil Wang, thanks
+        # 将cls 添加在第一个位置
         x = torch.cat((cls_tokens, x), dim=1)
+        # 和位置编码相加
         if self.pos_embed is not None:
             x = x + self.pos_embed
         x = self.pos_drop(x)
@@ -403,6 +434,9 @@ class VisionTransformer(nn.Module):
         return x
 
     def get_intermediate_layers(self, x):
+        """
+        可以用来提取block内部的特征,对模型进行诊断或finetune。
+        """
         x = self.patch_embed(x)
         batch_size, seq_len, _ = x.size()
 
