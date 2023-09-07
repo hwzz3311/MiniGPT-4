@@ -212,6 +212,22 @@ class PatchEmbed(nn.Module):
 
 
 class RelativePositionBias(nn.Module):
+    """
+    解释一下Vision Transformer中相对位置编码的实现:
+
+    在图像里,每个pixel可以看成是一个向量,就是输入的特征图中的一个向量。
+    对于注意力机制来说,需要计算每个pixel向量和其他所有pixel向量之间的关系。
+    但是不同位置的pixel其实Encoding的信息不一样,所以需要加入位置的信息。
+    Vision Transformer这里引入了相对位置编码,就是每个pixel会编码自己相对于其他pixel的相对位置信息。
+    具体来说,给每个pixel增加两个值:
+    行号row:表示相对于第一行的偏移量
+    列号col:表示相对于第一列的偏移量
+    然后给row和col每个位置编码一个可学习的向量,其长度等于transformer的hidden size。
+    在计算注意力时,将每个pixel的row向量和col向量分别加到query向量和key向量上。
+    这样注意力就可以感知不同位置的pixel之间的相对位置关系,从而提升模型对图像的建模能力。
+    经过训练,这些位置编码向量可以自动学习到合理的值,来控制不同相对位置pixel之间的关系。
+    所以位置编码为注意力机制提供了额外的位置信息,是Vision Transformer有效处理图像的关键。
+    """
 
     def __init__(self, window_size, num_heads):
         """
@@ -227,24 +243,34 @@ class RelativePositionBias(nn.Module):
         # 第一个额外索引（self.num_relative_distance - 3）表示 "cls to token" 的相对位置。
         # 第二个额外索引（self.num_relative_distance - 2）表示 "token to cls" 的相对位置。
         # 第三个额外索引（self.num_relative_distance - 1）表示 "cls to cls" 的相对位置。
+        # cls to token & token 2 cls & cls to cls
         self.num_relative_distance = (2 * window_size[0] - 1) * (2 * window_size[1] - 1) + 3
+        # 存储相对位置编码的参数
         self.relative_position_bias_table = nn.Parameter(
             torch.zeros(self.num_relative_distance, num_heads))  # 2*Wh-1 * 2*Ww-1, nH
-        # cls to token & token 2 cls & cls to cls
+
 
         # get pair-wise relative position index for each token inside the window
         coords_h = torch.arange(window_size[0])
         coords_w = torch.arange(window_size[1])
-        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
+        # coords用于后续计算相对位置编码，以捕获窗口内不同位置之间的相对坐标关系
+        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # shape : (2, Wh, Ww) 这一行将 coords_h 和 coords_w 组合成一个坐标网格 coords
+        # 这一行代码将之前创建的坐标网格张量 coords 进行了展平操作，将形状为 (2, Wh, Ww) 的张量变成了形状为 (2, Wh*Ww) 的张量
         coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
-        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
-        relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
-        relative_coords[:, :, 0] += window_size[0] - 1  # shift to start from 0
+        # 这一行计算了相对坐标（relative_coords），它表示了每个位置与其他位置之间的相对坐标差异。
+        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww # 形状变成了 (2, Wh*Ww, Wh*Ww)，其中第一个维度表示坐标维度（高度和宽度），第二个和第三个维度表示位置之间的相对坐标。
+        relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2 # 重新排列了相对坐标 relative_coords 的维度顺序，以将高度、宽度和坐标维度放在最后。
+        # 这两行代码分别将相对坐标的高度和宽度维度上的值加上了 window_size 中的对应值。这是为了将坐标从以窗口左上角为原点的坐标系（通常从0开始）转换为以窗口左上角为坐标0的坐标系。
+        relative_coords[:, :, 0] += window_size[0] - 1  # shift to start from 0  #
         relative_coords[:, :, 1] += window_size[1] - 1
+        # 这一行将相对坐标的高度维度上的值乘以 2 * window_size[1] - 1。这是为了将坐标映射到一个较大的范围内，以便能够容纳窗口内不同位置的相对位置关系。
         relative_coords[:, :, 0] *= 2 * window_size[1] - 1
+        # 用于存储相对位置索引。
         relative_position_index = \
             torch.zeros(size=(window_size[0] * window_size[1] + 1,) * 2, dtype=relative_coords.dtype)
+        # 这一行将之前计算的相对坐标 relative_coords 中的每个位置之间的相对坐标和存储到 relative_position_index 张量中。这样，relative_position_index 中的每个元素表示了不同位置之间的相对位置索引。
         relative_position_index[1:, 1:] = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
+        # 分别将特殊情况的相对位置索引设置为特定的值 cls to token & token 2 cls & cls to cls
         relative_position_index[0, 0:] = self.num_relative_distance - 3
         relative_position_index[0:, 0] = self.num_relative_distance - 2
         relative_position_index[0, 0] = self.num_relative_distance - 1
@@ -254,11 +280,13 @@ class RelativePositionBias(nn.Module):
         # trunc_normal_(self.relative_position_bias_table, std=.02)
 
     def forward(self):
-        relative_position_bias = \
-            self.relative_position_bias_table[self.relative_position_index.view(-1)].view(
-                self.window_size[0] * self.window_size[1] + 1,
-                self.window_size[0] * self.window_size[1] + 1, -1)  # Wh*Ww,Wh*Ww,nH
-        return relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
+        # self.relative_position_index.view(-1) 将相对位置索引张量展平为一维，以便从权重表中查找相应的相对位置编码权重。
+        relative_position_index_tensor = self.relative_position_index.view(-1)
+        # self.relative_position_bias_table[self.relative_position_index.view(-1)] 使用相对位置索引查找相对位置编码权重。
+        relative_position_bias_table_weight = self.relative_position_bias_table[self.relative_position_index.view(-1)]
+        # .view(self.window_size[0] * self.window_size[1] + 1, self.window_size[0] * self.window_size[1] + 1, -1) 将查找到的权重重塑为形状为 (Wh*Ww, Wh*Ww, nH) 的张量，其中 Wh*Ww 表示窗口内的位置数，nH 表示注意力头的数量。
+        relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(self.window_size[0] * self.window_size[1] + 1, self.window_size[0] * self.window_size[1] + 1, -1)  # Wh*Ww,Wh*Ww,nH
+        return relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww 这一行重新排列 relative_position_bias 张量的维度，以匹配多头注意力的要求。
 
 
 class VisionTransformer(nn.Module):
