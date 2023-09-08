@@ -309,10 +309,6 @@ class VisionTransformer(nn.Module):
         # 在patch embedding后的序列中,添加一个class token,用来表示整张图片的特征。这个token和NLP中的[CLS] token类似,后续分类时用这个token的特征进行分类。
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))  # cls token
 
-        # 同时定义了绝对位置编码pos_embed和相对位置编码rel_pos_bias,原因是:
-        #
-        # 绝对位置编码pos_embed可以提供每个patch的绝对坐标信息。这对图片中的局部特征是非常重要的,可以帮助模型理解图像内容。
-        # 相对位置编码rel_pos_bias可以提供像素之间的相对坐标信息。这对学习图像的二维几何结构非常重要。
         if use_abs_pos_emb:
             self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))  # 绝对位置编码，加1是因为要额外添加class token
         else:
